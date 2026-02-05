@@ -4,6 +4,19 @@
   "description": "Prime your Claude sessions with preloaded skills from ~/.claude/skills and ./.claude/skills",
   "module": "index.ts",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/johnlindquist/skills-primer.git"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "skills",
+    "ai",
+    "cli"
+  ],
+  "author": "John Lindquist",
+  "license": "MIT",
   "bin": {
     "skills-primer": "./index.ts",
     "sp": "./index.ts",
@@ -14,8 +27,15 @@
     "link": "bun link"
   },
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^12.0.2",
+    "@semantic-release/npm": "^13.1.2",
+    "@semantic-release/release-notes-generator": "^14.1.0",
     "@types/bun": "latest",
-    "@types/prompts": "^2.4.9"
+    "@types/prompts": "^2.4.9",
+    "semantic-release": "^25.0.2"
   },
   "peerDependencies": {
     "typescript": "^5"
