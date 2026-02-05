@@ -4,8 +4,87 @@ import prompts from "prompts";
 import matter from "gray-matter";
 import { homedir } from "os";
 import { join, resolve, dirname, basename } from "path";
-import { readFileSync, existsSync, readdirSync, statSync, realpathSync, writeFileSync, mkdirSync } from "fs";
+import { readFileSync, existsSync, readdirSync, statSync, realpathSync, writeFileSync, mkdirSync, unlinkSync } from "fs";
 import { spawn } from "child_process";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Argument parsing
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ParsedArgs {
+  help: boolean;
+  clearRecent: boolean;
+  list: boolean;
+  claudeArgs: string[];
+}
+
+function parseArgs(argv: string[]): ParsedArgs {
+  const args = argv.slice(2); // Skip node/bun and script path
+  const result: ParsedArgs = {
+    help: false,
+    clearRecent: false,
+    list: false,
+    claudeArgs: [],
+  };
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+
+    // Everything after -- goes to claude
+    if (arg === "--") {
+      result.claudeArgs.push(...args.slice(i + 1));
+      break;
+    }
+
+    // skills-loader specific flags
+    if (arg === "--help" || arg === "-h") {
+      result.help = true;
+      i++;
+    } else if (arg === "--clear-recent") {
+      result.clearRecent = true;
+      i++;
+    } else if (arg === "--list" || arg === "-l") {
+      result.list = true;
+      i++;
+    } else {
+      // Pass unrecognized args to claude
+      result.claudeArgs.push(arg);
+      i++;
+    }
+  }
+
+  return result;
+}
+
+function showHelp(): void {
+  console.log(`
+skills-loader - Preload Claude skills into your sessions
+
+USAGE:
+  skills-loader [options] [-- claude-options]
+
+OPTIONS:
+  -h, --help        Show this help message
+  -l, --list        List available skills and exit
+  --clear-recent    Clear the recent skills cache
+
+CLAUDE OPTIONS:
+  All other options are passed directly to Claude. Use -- to explicitly
+  separate skills-loader options from Claude options.
+
+EXAMPLES:
+  skills-loader                     Interactive skill selection
+  skills-loader --list              List all available skills
+  skills-loader -- --model opus     Use Opus model
+  skills-loader -- -p "prompt"      Run with a prompt (non-interactive)
+  skills-loader -- -c               Continue previous conversation
+
+SKILL LOCATIONS:
+  Global: ~/.claude/skills/
+  Local:  ./.claude/skills/
+`);
+}
 
 interface Skill {
   name: string;
@@ -210,6 +289,29 @@ ${ref.content}
 }
 
 async function main() {
+  const args = parseArgs(process.argv);
+
+  // Handle --help
+  if (args.help) {
+    showHelp();
+    process.exit(0);
+  }
+
+  // Handle --clear-recent
+  if (args.clearRecent) {
+    try {
+      if (existsSync(CACHE_FILE)) {
+        unlinkSync(CACHE_FILE);
+        console.log("✓ Recent skills cache cleared");
+      } else {
+        console.log("No recent skills cache to clear");
+      }
+    } catch (error) {
+      console.error("Failed to clear cache:", error);
+    }
+    process.exit(0);
+  }
+
   console.log("🔍 Scanning for skills...\n");
 
   // Find all skills
@@ -233,6 +335,22 @@ async function main() {
     console.log(`  - ${GLOBAL_SKILLS_DIR}`);
     console.log(`  - ${LOCAL_SKILLS_DIR}`);
     process.exit(1);
+  }
+
+  // Handle --list
+  if (args.list) {
+    const cache = loadRecentCache();
+    const recentKeys = new Set(Object.keys(cache.recent));
+    const sortedSkills = sortSkillsByRecent(skills, cache);
+
+    console.log(`Found ${skills.length} skill(s):\n`);
+    for (const skill of sortedSkills) {
+      const isRecent = recentKeys.has(getSkillKey(skill));
+      const prefix = isRecent ? "⏱" : " ";
+      console.log(`${prefix} [${skill.source}] ${skill.name}`);
+      console.log(`    ${skill.description.slice(0, 70)}${skill.description.length > 70 ? "..." : ""}`);
+    }
+    process.exit(0);
   }
 
   console.log(`Found ${skills.length} skill(s)\n`);
@@ -277,7 +395,7 @@ async function main() {
 
   if (selectedSkills.length === 0) {
     console.log("\nNo skills selected. Launching Claude without preloaded skills...\n");
-    const claude = spawn("claude", process.argv.slice(2), {
+    const claude = spawn("claude", args.claudeArgs, {
       stdio: "inherit",
     });
     claude.on("exit", (code) => process.exit(code || 0));
@@ -300,7 +418,7 @@ async function main() {
   console.log(`📊 Estimated context size: ~${estimatedTokens.toLocaleString()} tokens\n`);
 
   // Build claude command args
-  const claudeArgs = ["--append-system-prompt", systemPrompt, ...process.argv.slice(2)];
+  const claudeArgs = ["--append-system-prompt", systemPrompt, ...args.claudeArgs];
 
   console.log("🚀 Launching Claude with preloaded skills...\n");
   console.log("─".repeat(50));
