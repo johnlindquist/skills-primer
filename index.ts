@@ -59,10 +59,11 @@ function parseArgs(argv: string[]): ParsedArgs {
 
 function showHelp(): void {
   console.log(`
-skills-loader - Preload Claude skills into your sessions
+skills-primer (sp) - Prime your Claude sessions with preloaded skills
 
 USAGE:
-  skills-loader [options] [-- claude-options]
+  sp [options] [-- claude-options]
+  skills-primer [options] [-- claude-options]
 
 OPTIONS:
   -h, --help        Show this help message
@@ -71,14 +72,14 @@ OPTIONS:
 
 CLAUDE OPTIONS:
   All other options are passed directly to Claude. Use -- to explicitly
-  separate skills-loader options from Claude options.
+  separate skills-primer options from Claude options.
 
 EXAMPLES:
-  skills-loader                     Interactive skill selection
-  skills-loader --list              List all available skills
-  skills-loader -- --model opus     Use Opus model
-  skills-loader -- -p "prompt"      Run with a prompt (non-interactive)
-  skills-loader -- -c               Continue previous conversation
+  sp                          Interactive skill selection
+  sp --list                   List all available skills
+  sp -- --model opus          Use Opus model
+  sp -- -p "prompt"           Run with a prompt (non-interactive)
+  sp -- -c                    Continue previous conversation
 
 SKILL LOCATIONS:
   Global: ~/.claude/skills/
@@ -106,7 +107,7 @@ interface RecentCache {
 
 const GLOBAL_SKILLS_DIR = join(homedir(), ".claude", "skills");
 const LOCAL_SKILLS_DIR = join(process.cwd(), ".claude", "skills");
-const CACHE_DIR = join(homedir(), ".cache", "skills-loader");
+const CACHE_DIR = join(homedir(), ".cache", "skills-primer");
 const CACHE_FILE = join(CACHE_DIR, "recent.json");
 const MAX_RECENT = 10; // Keep track of last 10 used skills
 

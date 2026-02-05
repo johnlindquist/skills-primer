@@ -1,11 +1,12 @@
 {
-  "name": "skills-loader",
+  "name": "skills-primer",
   "version": "1.0.0",
-  "description": "CLI to preload Claude skills from ~/.claude/skills and ./.claude/skills",
+  "description": "Prime your Claude sessions with preloaded skills from ~/.claude/skills and ./.claude/skills",
   "module": "index.ts",
   "type": "module",
   "bin": {
-    "skills-loader": "./index.ts"
+    "skills-primer": "./index.ts",
+    "sp": "./index.ts"
   },
   "scripts": {
     "start": "bun run index.ts",

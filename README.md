@@ -1,6 +1,6 @@
-# skills-loader
+# skills-primer
 
-A CLI tool to preload Claude skills into your Claude Code sessions.
+Prime your Claude Code sessions with preloaded skills.
 
 ## Installation
 
@@ -12,19 +12,34 @@ bun link
 ## Usage
 
 ```bash
-skills-loader
+sp                    # Short alias
+skills-primer         # Full command
 ```
 
 This will:
 1. Scan for skills in `~/.claude/skills/` (global) and `./.claude/skills/` (local)
-2. Present an interactive selector to choose which skills to preload
-3. Launch Claude with the selected skills injected via `--append-system-prompt`
+2. Present an interactive selector with autocomplete filtering
+3. Launch Claude with selected skills injected via `--append-system-prompt`
 
-You can also pass additional Claude CLI arguments:
+Recently used skills appear at the top with a ⏱ icon.
+
+## Options
+
+```
+-h, --help        Show help message
+-l, --list        List available skills and exit
+--clear-recent    Clear the recent skills cache
+```
+
+## Passing Options to Claude
+
+Use `--` to separate skills-primer options from Claude options:
 
 ```bash
-skills-loader --model opus
-skills-loader -p "help me with this task"
+sp -- --model opus           # Use Opus model
+sp -- -p "help me with x"    # Non-interactive prompt mode
+sp -- -c                     # Continue previous conversation
+sp -- --model sonnet -p "x"  # Multiple Claude options
 ```
 
 ## Skill Format
@@ -42,8 +57,19 @@ description: What this skill does
 Instructions, patterns, and knowledge for Claude to follow.
 ```
 
-Skills can also have a `references/` subdirectory with additional files that will be included.
+Skills can include a `references/` subdirectory with additional context files.
+
+## Skill Locations
+
+| Location | Scope |
+|----------|-------|
+| `~/.claude/skills/` | Global (all projects) |
+| `./.claude/skills/` | Local (current project) |
 
 ## How It Works
 
-The tool reads all selected skills and their references, then passes them to Claude via `--append-system-prompt` with context explaining that these skills were deliberately preloaded by the user for the upcoming task.
+Selected skills and their references are read and passed to Claude via `--append-system-prompt` with context explaining that these skills were deliberately preloaded for the upcoming task. Claude is instructed to follow the patterns and practices defined in these skills.
+
+## Cache
+
+Recent selections are cached at `~/.cache/skills-primer/recent.json` to surface frequently used skills first. Clear with `sp --clear-recent`.
