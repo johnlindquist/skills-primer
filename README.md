@@ -12,7 +12,8 @@ bun link
 ## Usage
 
 ```bash
-sp                    # Short alias
+sp                    # Standard mode
+spx                   # Dangerous mode (skips permission prompts)
 skills-primer         # Full command
 ```
 
@@ -22,6 +23,13 @@ This will:
 3. Launch Claude with selected skills injected via `--append-system-prompt`
 
 Recently used skills appear at the top with a ⏱ icon.
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `sp` | Standard mode - prompts for permissions |
+| `spx` | Dangerous mode - auto-passes `--dangerously-skip-permissions` |
 
 ## Options
 
@@ -39,7 +47,7 @@ Use `--` to separate skills-primer options from Claude options:
 sp -- --model opus           # Use Opus model
 sp -- -p "help me with x"    # Non-interactive prompt mode
 sp -- -c                     # Continue previous conversation
-sp -- --model sonnet -p "x"  # Multiple Claude options
+spx -- --model opus          # Dangerous mode + Opus
 ```
 
 ## Skill Format

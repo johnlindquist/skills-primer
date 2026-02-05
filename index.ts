@@ -15,15 +15,21 @@ interface ParsedArgs {
   help: boolean;
   clearRecent: boolean;
   list: boolean;
+  dangerousMode: boolean;
   claudeArgs: string[];
 }
 
+// Check for dangerous mode via environment variable (set by spx.ts entry point)
+const DANGEROUS_MODE = process.env.SKILLS_PRIMER_DANGEROUS === "1";
+
 function parseArgs(argv: string[]): ParsedArgs {
   const args = argv.slice(2); // Skip node/bun and script path
+
   const result: ParsedArgs = {
     help: false,
     clearRecent: false,
     list: false,
+    dangerousMode: DANGEROUS_MODE,
     claudeArgs: [],
   };
 
@@ -57,13 +63,18 @@ function parseArgs(argv: string[]): ParsedArgs {
   return result;
 }
 
-function showHelp(): void {
-  console.log(`
-skills-primer (sp) - Prime your Claude sessions with preloaded skills
+function showHelp(dangerousMode: boolean): void {
+  const cmd = dangerousMode ? "spx" : "sp";
+  const dangerousNote = dangerousMode
+    ? "\n⚠️  DANGEROUS MODE: --dangerously-skip-permissions is auto-enabled\n"
+    : "";
 
+  console.log(`
+skills-primer (${cmd}) - Prime your Claude sessions with preloaded skills
+${dangerousNote}
 USAGE:
-  sp [options] [-- claude-options]
-  skills-primer [options] [-- claude-options]
+  sp [options] [-- claude-options]       Standard mode
+  spx [options] [-- claude-options]      Dangerous mode (skips permissions)
 
 OPTIONS:
   -h, --help        Show this help message
@@ -79,7 +90,7 @@ EXAMPLES:
   sp --list                   List all available skills
   sp -- --model opus          Use Opus model
   sp -- -p "prompt"           Run with a prompt (non-interactive)
-  sp -- -c                    Continue previous conversation
+  spx                         Skip all permission prompts
 
 SKILL LOCATIONS:
   Global: ~/.claude/skills/
@@ -294,8 +305,13 @@ async function main() {
 
   // Handle --help
   if (args.help) {
-    showHelp();
+    showHelp(args.dangerousMode);
     process.exit(0);
+  }
+
+  // Show warning banner for dangerous mode
+  if (args.dangerousMode) {
+    console.log("⚠️  DANGEROUS MODE: Permission checks will be skipped\n");
   }
 
   // Handle --clear-recent
@@ -396,7 +412,8 @@ async function main() {
 
   if (selectedSkills.length === 0) {
     console.log("\nNo skills selected. Launching Claude without preloaded skills...\n");
-    const claude = spawn("claude", args.claudeArgs, {
+    const baseArgs = args.dangerousMode ? ["--dangerously-skip-permissions"] : [];
+    const claude = spawn("claude", [...baseArgs, ...args.claudeArgs], {
       stdio: "inherit",
     });
     claude.on("exit", (code) => process.exit(code || 0));
@@ -419,7 +436,8 @@ async function main() {
   console.log(`📊 Estimated context size: ~${estimatedTokens.toLocaleString()} tokens\n`);
 
   // Build claude command args
-  const claudeArgs = ["--append-system-prompt", systemPrompt, ...args.claudeArgs];
+  const dangerousArgs = args.dangerousMode ? ["--dangerously-skip-permissions"] : [];
+  const claudeArgs = [...dangerousArgs, "--append-system-prompt", systemPrompt, ...args.claudeArgs];
 
   console.log("🚀 Launching Claude with preloaded skills...\n");
   console.log("─".repeat(50));

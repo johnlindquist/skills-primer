@@ -6,7 +6,8 @@
   "type": "module",
   "bin": {
     "skills-primer": "./index.ts",
-    "sp": "./index.ts"
+    "sp": "./index.ts",
+    "spx": "./spx.ts"
   },
   "scripts": {
     "start": "bun run index.ts",
