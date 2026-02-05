@@ -1,0 +1,25 @@
+{
+  "name": "skills-loader",
+  "version": "1.0.0",
+  "description": "CLI to preload Claude skills from ~/.claude/skills and ./.claude/skills",
+  "module": "index.ts",
+  "type": "module",
+  "bin": {
+    "skills-loader": "./index.ts"
+  },
+  "scripts": {
+    "start": "bun run index.ts",
+    "link": "bun link"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.2.0",
+    "glob": "^13.0.1",
+    "gray-matter": "^4.0.3"
+  }
+}

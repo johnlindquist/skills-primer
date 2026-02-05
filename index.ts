@@ -1,0 +1,234 @@
+#!/usr/bin/env bun
+
+import { checkbox } from "@inquirer/prompts";
+import matter from "gray-matter";
+import { homedir } from "os";
+import { join, resolve, dirname, basename } from "path";
+import { readFileSync, existsSync, readdirSync, statSync, realpathSync } from "fs";
+import { spawn } from "child_process";
+
+interface Skill {
+  name: string;
+  description: string;
+  path: string;
+  source: "global" | "local";
+}
+
+interface SkillContent {
+  skill: Skill;
+  mainContent: string;
+  references: Array<{ name: string; content: string }>;
+}
+
+const GLOBAL_SKILLS_DIR = join(homedir(), ".claude", "skills");
+const LOCAL_SKILLS_DIR = join(process.cwd(), ".claude", "skills");
+
+async function findSkillFiles(dir: string): Promise<string[]> {
+  if (!existsSync(dir)) return [];
+
+  const entries = readdirSync(dir, { withFileTypes: true });
+  const skillPaths: string[] = [];
+
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name);
+
+    // Handle symlinks by resolving them
+    let realPath = fullPath;
+    if (entry.isSymbolicLink()) {
+      try {
+        realPath = realpathSync(fullPath);
+      } catch {
+        continue;
+      }
+    }
+
+    // Check if it's a directory containing SKILL.md
+    const stat = statSync(realPath, { throwIfNoEntry: false });
+    if (stat?.isDirectory()) {
+      const skillFile = join(realPath, "SKILL.md");
+      if (existsSync(skillFile)) {
+        skillPaths.push(skillFile);
+      }
+    }
+    // Check if it's a direct SKILL.md file
+    else if (entry.name === "SKILL.md") {
+      skillPaths.push(fullPath);
+    }
+  }
+
+  return skillPaths;
+}
+
+async function parseSkill(
+  skillPath: string,
+  source: "global" | "local"
+): Promise<Skill | null> {
+  try {
+    const content = readFileSync(skillPath, "utf-8");
+    const { data } = matter(content);
+
+    // Derive name from directory if not in frontmatter
+    const skillDir = dirname(skillPath);
+    const name = data.name || basename(skillDir);
+    const description = data.description || "No description provided";
+
+    return {
+      name,
+      description,
+      path: skillPath,
+      source,
+    };
+  } catch (error) {
+    console.error(`Failed to parse skill at ${skillPath}:`, error);
+    return null;
+  }
+}
+
+function readSkillContent(skill: Skill): SkillContent {
+  const mainContent = readFileSync(skill.path, "utf-8");
+  const skillDir = dirname(skill.path);
+  const referencesDir = join(skillDir, "references");
+
+  const references: Array<{ name: string; content: string }> = [];
+
+  if (existsSync(referencesDir)) {
+    const refFiles = readdirSync(referencesDir);
+    for (const refFile of refFiles) {
+      const refPath = join(referencesDir, refFile);
+      const stat = statSync(refPath, { throwIfNoEntry: false });
+      if (stat?.isFile()) {
+        try {
+          const content = readFileSync(refPath, "utf-8");
+          references.push({ name: refFile, content });
+        } catch {
+          // Skip files that can't be read
+        }
+      }
+    }
+  }
+
+  return { skill, mainContent, references };
+}
+
+function buildSystemPrompt(skills: SkillContent[]): string {
+  const header = `The user preloaded the following skills knowing that they would be required for the task they're about to start. These skills contain specialized knowledge, patterns, and best practices that you MUST follow when relevant to the user's request.
+
+---
+PRELOADED SKILLS
+---
+
+`;
+
+  const skillsText = skills
+    .map((s) => {
+      let text = `## Skill: ${s.skill.name} (${s.skill.source})
+
+${s.mainContent}`;
+
+      if (s.references.length > 0) {
+        text += `
+
+### References for ${s.skill.name}
+
+`;
+        for (const ref of s.references) {
+          text += `#### ${ref.name}
+
+${ref.content}
+
+`;
+        }
+      }
+
+      return text;
+    })
+    .join("\n---\n\n");
+
+  return header + skillsText;
+}
+
+async function main() {
+  console.log("🔍 Scanning for skills...\n");
+
+  // Find all skills
+  const globalSkillPaths = await findSkillFiles(GLOBAL_SKILLS_DIR);
+  const localSkillPaths = await findSkillFiles(LOCAL_SKILLS_DIR);
+
+  const skills: Skill[] = [];
+
+  for (const path of globalSkillPaths) {
+    const skill = await parseSkill(path, "global");
+    if (skill) skills.push(skill);
+  }
+
+  for (const path of localSkillPaths) {
+    const skill = await parseSkill(path, "local");
+    if (skill) skills.push(skill);
+  }
+
+  if (skills.length === 0) {
+    console.log("No skills found in:");
+    console.log(`  - ${GLOBAL_SKILLS_DIR}`);
+    console.log(`  - ${LOCAL_SKILLS_DIR}`);
+    process.exit(1);
+  }
+
+  console.log(`Found ${skills.length} skill(s)\n`);
+
+  // Let user select skills
+  const selectedSkills = await checkbox({
+    message: "Select skills to preload:",
+    choices: skills.map((skill) => ({
+      name: `[${skill.source}] ${skill.name}`,
+      value: skill,
+      description: skill.description,
+    })),
+    pageSize: 15,
+  });
+
+  if (selectedSkills.length === 0) {
+    console.log("\nNo skills selected. Launching Claude without preloaded skills...\n");
+    const claude = spawn("claude", process.argv.slice(2), {
+      stdio: "inherit",
+    });
+    claude.on("exit", (code) => process.exit(code || 0));
+    return;
+  }
+
+  console.log(`\n📚 Loading ${selectedSkills.length} skill(s)...`);
+
+  // Read all skill content
+  const skillContents = selectedSkills.map(readSkillContent);
+
+  // Build the system prompt
+  const systemPrompt = buildSystemPrompt(skillContents);
+
+  // Calculate approximate token count (rough estimate: 4 chars per token)
+  const estimatedTokens = Math.ceil(systemPrompt.length / 4);
+  console.log(`📊 Estimated context size: ~${estimatedTokens.toLocaleString()} tokens\n`);
+
+  // Build claude command args
+  const claudeArgs = ["--append-system-prompt", systemPrompt, ...process.argv.slice(2)];
+
+  console.log("🚀 Launching Claude with preloaded skills...\n");
+  console.log("─".repeat(50));
+  console.log("Loaded skills:");
+  for (const s of selectedSkills) {
+    console.log(`  • ${s.name} (${s.source})`);
+  }
+  console.log("─".repeat(50) + "\n");
+
+  // Launch claude
+  const claude = spawn("claude", claudeArgs, {
+    stdio: "inherit",
+  });
+
+  claude.on("exit", (code) => {
+    process.exit(code || 0);
+  });
+}
+
+main().catch((error) => {
+  console.error("Error:", error);
+  process.exit(1);
+});
