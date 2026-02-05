@@ -4,7 +4,7 @@ import prompts from "prompts";
 import matter from "gray-matter";
 import { homedir } from "os";
 import { join, resolve, dirname, basename } from "path";
-import { readFileSync, existsSync, readdirSync, statSync, realpathSync } from "fs";
+import { readFileSync, existsSync, readdirSync, statSync, realpathSync, writeFileSync, mkdirSync } from "fs";
 import { spawn } from "child_process";
 
 interface Skill {
@@ -20,8 +20,70 @@ interface SkillContent {
   references: Array<{ name: string; content: string }>;
 }
 
+interface RecentCache {
+  // Map of skill key (source:name) to last used timestamp
+  recent: Record<string, number>;
+}
+
 const GLOBAL_SKILLS_DIR = join(homedir(), ".claude", "skills");
 const LOCAL_SKILLS_DIR = join(process.cwd(), ".claude", "skills");
+const CACHE_DIR = join(homedir(), ".cache", "skills-loader");
+const CACHE_FILE = join(CACHE_DIR, "recent.json");
+const MAX_RECENT = 10; // Keep track of last 10 used skills
+
+function getSkillKey(skill: Skill): string {
+  return `${skill.source}:${skill.name}`;
+}
+
+function loadRecentCache(): RecentCache {
+  try {
+    if (existsSync(CACHE_FILE)) {
+      const data = readFileSync(CACHE_FILE, "utf-8");
+      return JSON.parse(data);
+    }
+  } catch {
+    // Ignore errors, return empty cache
+  }
+  return { recent: {} };
+}
+
+function saveRecentCache(cache: RecentCache): void {
+  try {
+    mkdirSync(CACHE_DIR, { recursive: true });
+    writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2));
+  } catch {
+    // Ignore errors
+  }
+}
+
+function updateRecentCache(skills: Skill[]): void {
+  const cache = loadRecentCache();
+  const now = Date.now();
+
+  // Add/update selected skills
+  for (const skill of skills) {
+    cache.recent[getSkillKey(skill)] = now;
+  }
+
+  // Prune to keep only MAX_RECENT most recent
+  const entries = Object.entries(cache.recent);
+  if (entries.length > MAX_RECENT) {
+    entries.sort((a, b) => b[1] - a[1]); // Sort by timestamp desc
+    cache.recent = Object.fromEntries(entries.slice(0, MAX_RECENT));
+  }
+
+  saveRecentCache(cache);
+}
+
+function sortSkillsByRecent(skills: Skill[], cache: RecentCache): Skill[] {
+  return [...skills].sort((a, b) => {
+    const aTime = cache.recent[getSkillKey(a)] || 0;
+    const bTime = cache.recent[getSkillKey(b)] || 0;
+    // Sort by most recent first, then alphabetically
+    if (aTime !== bTime) return bTime - aTime;
+    return a.name.localeCompare(b.name);
+  });
+}
 
 async function findSkillFiles(dir: string): Promise<string[]> {
   if (!existsSync(dir)) return [];
@@ -175,12 +237,22 @@ async function main() {
 
   console.log(`Found ${skills.length} skill(s)\n`);
 
-  // Build choices for the prompt
-  const choices = skills.map((skill) => ({
-    title: `[${skill.source}] ${skill.name}`,
-    description: skill.description,
-    value: skill,
-  }));
+  // Load recent cache and sort skills
+  const cache = loadRecentCache();
+  const recentKeys = new Set(Object.keys(cache.recent));
+  const sortedSkills = sortSkillsByRecent(skills, cache);
+
+  // Build choices for the prompt, marking recent skills
+  const choices = sortedSkills.map((skill) => {
+    const isRecent = recentKeys.has(getSkillKey(skill));
+    return {
+      title: isRecent
+        ? `⏱ [${skill.source}] ${skill.name}`
+        : `  [${skill.source}] ${skill.name}`,
+      description: skill.description,
+      value: skill,
+    };
+  });
 
   // Let user select skills with autocomplete filtering
   const response = await prompts({
@@ -211,6 +283,9 @@ async function main() {
     claude.on("exit", (code) => process.exit(code || 0));
     return;
   }
+
+  // Update recent cache with selected skills
+  updateRecentCache(selectedSkills);
 
   console.log(`\n📚 Loading ${selectedSkills.length} skill(s)...`);
 
