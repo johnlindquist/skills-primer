@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/johnlindquist/skills-primer/compare/v1.0.0...v1.0.1) (2026-02-05)
+
+
+### Bug Fixes
+
+* trigger 1.0.1 release ([4886f1b](https://github.com/johnlindquist/skills-primer/commit/4886f1ba394a2dd5a91e68f6f7c761a88e2fd15a))
+
 # 1.0.0 (2026-02-05)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "skills-primer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Prime your Claude sessions with preloaded skills from ~/.claude/skills and ./.claude/skills",
   "module": "index.ts",
   "type": "module",
