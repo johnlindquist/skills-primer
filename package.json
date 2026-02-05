@@ -12,14 +12,14 @@
     "link": "bun link"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/prompts": "^2.4.9"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
-    "@inquirer/prompts": "^8.2.0",
-    "glob": "^13.0.1",
-    "gray-matter": "^4.0.3"
+    "gray-matter": "^4.0.3",
+    "prompts": "^2.4.2"
   }
 }

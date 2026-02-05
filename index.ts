@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { checkbox } from "@inquirer/prompts";
+import prompts from "prompts";
 import matter from "gray-matter";
 import { homedir } from "os";
 import { join, resolve, dirname, basename } from "path";
@@ -175,16 +175,33 @@ async function main() {
 
   console.log(`Found ${skills.length} skill(s)\n`);
 
-  // Let user select skills
-  const selectedSkills = await checkbox({
-    message: "Select skills to preload:",
-    choices: skills.map((skill) => ({
-      name: `[${skill.source}] ${skill.name}`,
-      value: skill,
-      description: skill.description,
-    })),
-    pageSize: 15,
+  // Build choices for the prompt
+  const choices = skills.map((skill) => ({
+    title: `[${skill.source}] ${skill.name}`,
+    description: skill.description,
+    value: skill,
+  }));
+
+  // Let user select skills with autocomplete filtering
+  const response = await prompts({
+    type: "autocompleteMultiselect",
+    name: "selectedSkills",
+    message: "Select skills to preload (type to filter)",
+    choices,
+    instructions: false,
+    hint: "- Space to select. Return to submit",
+    suggest: async (input: string, choices: typeof skills extends (infer T)[] ? { title: string; description: string; value: T }[] : never[]) => {
+      const searchTerm = input.toLowerCase();
+      if (!searchTerm) return choices;
+      return choices.filter(
+        (choice) =>
+          choice.title.toLowerCase().includes(searchTerm) ||
+          choice.description.toLowerCase().includes(searchTerm)
+      );
+    },
   });
+
+  const selectedSkills: Skill[] = response.selectedSkills || [];
 
   if (selectedSkills.length === 0) {
     console.log("\nNo skills selected. Launching Claude without preloaded skills...\n");
