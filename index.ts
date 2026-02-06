@@ -109,6 +109,7 @@ interface SkillContent {
   skill: Skill;
   mainContent: string;
   references: Array<{ name: string; content: string }>;
+  truncated: boolean;
 }
 
 interface RecentCache {
@@ -237,8 +238,19 @@ async function parseSkill(
   }
 }
 
+const MAX_SKILL_LINES = 100;
+
 function readSkillContent(skill: Skill): SkillContent {
-  const mainContent = readFileSync(skill.path, "utf-8");
+  const rawContent = readFileSync(skill.path, "utf-8");
+
+  // Strip frontmatter before counting lines
+  const { content: strippedContent } = matter(rawContent);
+  const lines = strippedContent.split("\n");
+  const truncated = lines.length > MAX_SKILL_LINES;
+  const mainContent = truncated
+    ? lines.slice(0, MAX_SKILL_LINES).join("\n")
+    : strippedContent;
+
   const skillDir = dirname(skill.path);
   const referencesDir = join(skillDir, "references");
 
@@ -247,24 +259,17 @@ function readSkillContent(skill: Skill): SkillContent {
   if (existsSync(referencesDir)) {
     const refFiles = readdirSync(referencesDir);
     for (const refFile of refFiles) {
-      const refPath = join(referencesDir, refFile);
-      const stat = statSync(refPath, { throwIfNoEntry: false });
-      if (stat?.isFile()) {
-        try {
-          const content = readFileSync(refPath, "utf-8");
-          references.push({ name: refFile, content });
-        } catch {
-          // Skip files that can't be read
-        }
-      }
+      references.push({ name: refFile, content: "" }); // names only, not loaded
     }
   }
 
-  return { skill, mainContent, references };
+  return { skill, mainContent, references, truncated };
 }
 
 function buildSystemPrompt(skills: SkillContent[]): string {
   const header = `The user preloaded the following skills knowing that they would be required for the task they're about to start. These skills contain specialized knowledge, patterns, and best practices that you MUST follow when relevant to the user's request.
+
+Each skill below shows a preview (first ${MAX_SKILL_LINES} lines). If a skill is truncated or has references, use the Skill tool to load the full content when needed.
 
 ---
 PRELOADED SKILLS
@@ -274,28 +279,30 @@ PRELOADED SKILLS
 
   const skillsText = skills
     .map((s) => {
-      let text = `## Skill: ${s.skill.name} (${s.skill.source})
+      const skillDir = dirname(s.skill.path);
+      let text = `## ${s.skill.name}
+> Path: ${skillDir}
 
 ${s.mainContent}`;
+
+      if (s.truncated) {
+        text += `
+
+... (truncated - to load the rest of this skill use Skill(${s.skill.name}))`;
+      }
 
       if (s.references.length > 0) {
         text += `
 
-### References for ${s.skill.name}
+### Available references for ${s.skill.name}:
+${s.references.map((r) => `- ${r.name}`).join("\n")}
 
-`;
-        for (const ref of s.references) {
-          text += `#### ${ref.name}
-
-${ref.content}
-
-`;
-        }
+(To load any reference, use Skill(${s.skill.name}))`;
       }
 
       return text;
     })
-    .join("\n---\n\n");
+    .join("\n\n---\n\n");
 
   return header + skillsText;
 }
