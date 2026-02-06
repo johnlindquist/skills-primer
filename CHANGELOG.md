@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/johnlindquist/skills-primer/compare/v1.0.1...v1.1.0) (2026-02-06)
+
+
+### Features
+
+* truncate skills to 100 lines with progressive loading ([bd91dc2](https://github.com/johnlindquist/skills-primer/commit/bd91dc28812b9ab45787e2243ebd753f88836bd6))
+
 ## [1.0.1](https://github.com/johnlindquist/skills-primer/compare/v1.0.0...v1.0.1) (2026-02-05)
 
 
